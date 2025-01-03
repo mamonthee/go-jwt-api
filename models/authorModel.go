@@ -14,5 +14,5 @@ type Author struct {
 	IsActive  bool           `json:"is_active"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // Hidden in JSON responses
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
