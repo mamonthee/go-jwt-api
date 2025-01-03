@@ -113,7 +113,6 @@ func Login() gin.HandlerFunc {
 
 		// Verify the password
 		passwordIsValid, msg := VerifyPassword(author.Password, foundAuthor.Password)
-		fmt.Println("monmon***", passwordIsValid)
 		// Check if the account is active
 		if !foundAuthor.IsActive {
 			response.SendErrorResponse(ctx, "Account is deactivated", nil)
