@@ -3,6 +3,7 @@ package main
 import (
 	"go-jwt-api/database"
 	"go-jwt-api/routes"
+	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -21,5 +22,5 @@ func main() {
 	routes.AuthorRoutes(r)
 	routes.ArticleRoutes(r)
 
-	r.Run(":" + port)
+	log.Fatal(r.Run(":" + port))
 }

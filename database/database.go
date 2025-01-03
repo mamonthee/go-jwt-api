@@ -20,9 +20,9 @@ func ConnectDatabase() {
 	gormLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
-			SlowThreshold: 200 * time.Millisecond, // Slow SQL threshold
-			LogLevel:      logger.Silent,          // Silent logging
-			Colorful:      false,                  // No color for log output
+			SlowThreshold: 200 * time.Millisecond,
+			LogLevel:      logger.Silent, // Silent logging
+			Colorful:      false,         // No color for log output
 		},
 	)
 

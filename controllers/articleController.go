@@ -3,7 +3,7 @@ package controllers
 import (
 	"go-jwt-api/database"
 	"go-jwt-api/models"
-	"net/http"
+	"go-jwt-api/response"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,49 +12,49 @@ func CreateArticle() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var article models.Article
 		if err := ctx.BindJSON(&article); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
+			response.SendErrorResponse(ctx, err.Error(), nil)
 			return
 		}
 		// Get AuthorID from middleware
 		authorID, exists := ctx.Get("author_id")
 		if !exists {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			response.SendErrorResponse(ctx, "Unauthorized", nil)
 			return
 		}
 
 		article.AuthorID = authorID.(uint)
 		if err := database.DB.Create(&article).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create article"})
+			response.SendErrorResponse(ctx, "Failed to create article", nil)
 			return
 		}
 
 		// Preload the Author relationship
 		if err := database.DB.Preload("Author").First(&article, article.ID).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load author"})
+			response.SendErrorResponse(ctx, "Failed to load author", nil)
 			return
 		}
 
-		ctx.JSON(http.StatusCreated, gin.H{"message": "Article created successfully", "article": article})
+		response.SendSuccessResponse(ctx, "Article created successfully", article)
 	}
 }
 
-// GetArticles retrieves all articles for an authenticated author
+// GetArticles for an authenticated author
 func GetArticles() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var articles []models.Article
 
 		authorID, exists := ctx.Get("author_id")
 		if !exists {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			response.SendErrorResponse(ctx, "Unauthorized", nil)
 			return
 		}
 
 		if err := database.DB.Preload("Author").Where("author_id = ?", authorID).Find(&articles).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve articles"})
+			response.SendErrorResponse(ctx, "Failed to retrieve articles", nil)
 			return
 		}
 
-		ctx.JSON(http.StatusOK, gin.H{"articles": articles})
+		response.SendSuccessResponse(ctx, "Article created successfully", articles)
 	}
 }
 
@@ -65,27 +65,27 @@ func UpdateArticle() gin.HandlerFunc {
 
 		// Find the article by ID
 		if err := database.DB.First(&article, articleID).Error; err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Article not found"})
+			response.SendErrorResponse(ctx, "Article not found", nil)
 			return
 		}
 
 		// Retrieve the authorID from the JWT token in the context
 		loggedInAuthorIDStr, exists := ctx.Get("author_id")
 		if !exists {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			response.SendErrorResponse(ctx, "Unauthorized", nil)
 			return
 		}
 
 		// Ensure the logged-in user is the author of the article
 		if article.AuthorID != loggedInAuthorIDStr {
-			ctx.JSON(http.StatusForbidden, gin.H{"error": "You can only update your own articles"})
+			response.SendErrorResponse(ctx, "You can only update your own articles", nil)
 			return
 		}
 
 		// Bind the update data
 		var inputData models.Article
 		if err := ctx.ShouldBindJSON(&inputData); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			response.SendErrorResponse(ctx, err.Error(), nil)
 			return
 		}
 
@@ -103,11 +103,10 @@ func UpdateArticle() gin.HandlerFunc {
 
 		// Save to the database
 		if err := database.DB.Save(&article).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update article"})
+			response.SendErrorResponse(ctx, err.Error(), nil)
 			return
 		}
-
-		ctx.JSON(http.StatusOK, gin.H{"message": "Article updated successfully", "article": article})
+		response.SendSuccessResponse(ctx, "Article updated successfully", article)
 	}
 }
 
@@ -118,29 +117,28 @@ func DeleteArticle() gin.HandlerFunc {
 
 		// Find the article by ID
 		if err := database.DB.First(&article, articleID).Error; err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Article not found"})
+			response.SendErrorResponse(ctx, "Article not found", nil)
 			return
 		}
 
 		// Retrieve the authorID from the JWT token in the context
 		loggedInAuthorIDStr, exists := ctx.Get("author_id")
 		if !exists {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			response.SendErrorResponse(ctx, "Unauthorized", nil)
 			return
 		}
 
 		// Ensure the logged-in user is the author of the article
 		if article.AuthorID != loggedInAuthorIDStr {
-			ctx.JSON(http.StatusForbidden, gin.H{"error": "You can only delete your own articles"})
+			response.SendErrorResponse(ctx, "You can only delete your own articles", nil)
 			return
 		}
 
 		// Delete the article
 		if err := database.DB.Delete(&article).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete article"})
+			response.SendErrorResponse(ctx, "Failed to delete article", nil)
 			return
 		}
-
-		ctx.JSON(http.StatusOK, gin.H{"message": "Article deleted successfully"})
+		response.SendSuccessResponse(ctx, "Article deleted successfully", nil)
 	}
 }

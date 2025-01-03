@@ -6,8 +6,8 @@ import (
 	"go-jwt-api/helpers"
 	"go-jwt-api/models"
 	"go-jwt-api/redis"
+	"go-jwt-api/response"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -44,14 +44,16 @@ func Register() gin.HandlerFunc {
 
 		// Bind JSON body to the author struct
 		if err := ctx.BindJSON(&author); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
+			response.SendErrorResponse(ctx, err.Error(), nil)
+			// ctx.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
 			return
 		}
 
 		// Validate the author
 		validationErr := validate.Struct(author)
 		if validationErr != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"err": validationErr.Error()})
+			response.SendErrorResponse(ctx, validationErr.Error(), nil)
+			// ctx.JSON(http.StatusBadRequest, gin.H{"err": validationErr.Error()})
 			return
 		}
 
@@ -63,11 +65,12 @@ func Register() gin.HandlerFunc {
 				fmt.Println("Email does not exist, proceeding to create")
 			} else {
 				log.Printf("Database error: %v\n", err)
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+				response.SendErrorResponse(ctx, "Database error: "+err.Error(), nil)
+				// ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 				return
 			}
 		} else {
-			ctx.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+			response.SendErrorResponse(ctx, "Email already exists", nil)
 			return
 		}
 
@@ -79,12 +82,13 @@ func Register() gin.HandlerFunc {
 
 		// Save the user to the database
 		if err := database.DB.Create(&author).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create author"})
+			response.SendErrorResponse(ctx, "Failed to create author", nil)
 			return
 		}
 
 		// Respond with the created user
-		ctx.JSON(http.StatusOK, gin.H{"message": "Author created successfully", "author": author})
+		response.SendSuccessResponse(ctx, "Author created successfully", author)
+		// ctx.JSON(http.StatusOK, gin.H{"message": "Author created successfully", "author": author})
 	}
 }
 
@@ -95,7 +99,7 @@ func Login() gin.HandlerFunc {
 
 		// Bind JSON body to the author struct
 		if err := ctx.BindJSON(&author); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
+			response.SendErrorResponse(ctx, err.Error(), nil)
 			return
 		}
 
@@ -103,38 +107,41 @@ func Login() gin.HandlerFunc {
 		result := database.DB.Where("email = ?", author.Email).First(&foundAuthor)
 
 		if result.Error != nil || result.RowsAffected == 0 {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid email!"})
+			response.SendErrorResponse(ctx, "Invalid email!", nil)
 			return
 		}
 
 		// Verify the password
 		passwordIsValid, msg := VerifyPassword(author.Password, foundAuthor.Password)
-
+		fmt.Println("monmon***", passwordIsValid)
 		// Check if the account is active
 		if !foundAuthor.IsActive {
-			ctx.JSON(http.StatusForbidden, gin.H{"error": "Account is deactivated"})
+			response.SendErrorResponse(ctx, "Account is deactivated", nil)
 			return
 		}
 
 		if passwordIsValid != true {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+			response.SendErrorResponse(ctx, msg, nil)
 			return
 		}
 
 		if foundAuthor.Email == "" {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "email not found"})
+			response.SendErrorResponse(ctx, "email not found", nil)
 			return
 		}
 
 		// Generate a JWT token
 		token, refreshToken, err := helpers.GenerateTokens(foundAuthor.ID)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			response.SendErrorResponse(ctx, err.Error(), nil)
 			return
 		}
 
 		// Return the token
-		ctx.JSON(http.StatusOK, gin.H{"token": token, "refresh_token": refreshToken})
+		response.SendSuccessResponse(ctx, "Login successful", gin.H{
+			"token":         token,
+			"refresh_token": refreshToken,
+		})
 	}
 }
 
@@ -143,7 +150,7 @@ func UpdateAuthor() gin.HandlerFunc {
 		// Get the logged-in author's ID from the JWT token
 		loggedInAuthorID, exists := ctx.Get("author_id")
 		if !exists {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			response.SendErrorResponse(ctx, "Unauthorized", nil)
 			return
 		}
 
@@ -151,23 +158,22 @@ func UpdateAuthor() gin.HandlerFunc {
 		var author models.Author
 		if err := database.DB.First(&author, loggedInAuthorID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				ctx.JSON(http.StatusNotFound, gin.H{"error": "Author not found"})
+				response.SendErrorResponse(ctx, "Author not found", nil)
 			} else {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch author"})
+				response.SendErrorResponse(ctx, "Failed to fetch author", nil)
 			}
 			return
 		}
 
 		// Check if the account is active
 		if !author.IsActive {
-			ctx.JSON(http.StatusForbidden, gin.H{"error": "Account is deactivated"})
+			response.SendErrorResponse(ctx, "Account is deactivated", nil)
 			return
 		}
 
-		// Bind the input data (only username, email, and password in this case)
 		var input models.Author
 		if err := ctx.BindJSON(&input); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			response.SendErrorResponse(ctx, err.Error(), nil)
 			return
 		}
 
@@ -179,7 +185,7 @@ func UpdateAuthor() gin.HandlerFunc {
 			// Make sure the new email doesn't already exist
 			var existingAuthor models.Author
 			if err := database.DB.Where("email = ?", input.Email).First(&existingAuthor).Error; err == nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": "Email is already in use"})
+				response.SendErrorResponse(ctx, "Email is already in use", nil)
 				return
 			}
 			author.Email = input.Email
@@ -188,7 +194,7 @@ func UpdateAuthor() gin.HandlerFunc {
 			// Hash the new password
 			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+				response.SendErrorResponse(ctx, "Failed to hash password", nil)
 				return
 			}
 			author.Password = string(hashedPassword)
@@ -196,12 +202,12 @@ func UpdateAuthor() gin.HandlerFunc {
 
 		// Save the updated author details
 		if err := database.DB.Save(&author).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update author"})
+			response.SendErrorResponse(ctx, "Failed to update author", nil)
 			return
 		}
 
 		// Return a success response
-		ctx.JSON(http.StatusOK, gin.H{"message": "Author updated successfully", "author": author})
+		response.SendSuccessResponse(ctx, "Author updated successfully", author)
 	}
 }
 
@@ -210,7 +216,7 @@ func Deactivate() gin.HandlerFunc {
 		// Get the logged-in author's ID from the JWT token
 		loggedInAuthorID, exists := ctx.Get("author_id")
 		if !exists {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			response.SendErrorResponse(ctx, "Unauthorized", nil)
 			return
 		}
 
@@ -218,9 +224,9 @@ func Deactivate() gin.HandlerFunc {
 		var author models.Author
 		if err := database.DB.First(&author, loggedInAuthorID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				ctx.JSON(http.StatusNotFound, gin.H{"error": "Author not found"})
+				response.SendErrorResponse(ctx, "Author not found", nil)
 			} else {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch author"})
+				response.SendErrorResponse(ctx, "Failed to fetch author", nil)
 			}
 			return
 		}
@@ -230,7 +236,7 @@ func Deactivate() gin.HandlerFunc {
 
 		// Save the updated author details
 		if err := database.DB.Save(&author).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deactivate author"})
+			response.SendErrorResponse(ctx, "Failed to deactivate author", nil)
 			return
 		}
 
@@ -239,11 +245,11 @@ func Deactivate() gin.HandlerFunc {
 
 		err := redis.AddTokenToBlacklist(token, time.Hour*24) // Use the token's expiry time
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Could not blacklist token"})
+			response.SendErrorResponse(ctx, "Could not blacklist token", nil)
 			return
 		}
 
 		// Return a success response
-		ctx.JSON(http.StatusOK, gin.H{"message": "Author account deactivated successfully"})
+		response.SendSuccessResponse(ctx, "Author account deactivated successfully", nil)
 	}
 }
