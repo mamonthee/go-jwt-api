@@ -1,4 +1,4 @@
-module go-jwt-api
+module github.com/mamonthee/go-jwt-api
 
 go 1.22.1
 
